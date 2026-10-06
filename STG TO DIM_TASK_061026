@@ -1,0 +1,151 @@
+CREATE OR REPLACE PROCEDURE IFFU_DB.PUBLIC.LOAD_DERIVED_LINEITEM_PAR()
+RETURNS VARCHAR
+LANGUAGE SQL
+EXECUTE AS CALLER
+AS
+$$
+BEGIN
+
+    -- Step 1: Create derived table if it does not exist
+    CREATE TABLE IF NOT EXISTS IFFU_DB.PUBLIC.DERIVED_LINEITEM_PART
+    (
+        L_ORDERKEY              NUMBER,
+        L_PARTKEY               NUMBER,
+        L_SUPPKEY               NUMBER,
+        L_LINENUMBER            NUMBER,
+        L_QUANTITY              NUMBER(15,2),
+        L_EXTENDEDPRICE         NUMBER(15,2),
+        L_DISCOUNT              NUMBER(15,2),
+        L_TAX                   NUMBER(15,2),
+        L_RETURNFLAG            VARCHAR(1),
+        L_LINESTATUS            VARCHAR(1),
+        L_SHIPDATE              DATE,
+        L_COMMITDATE            DATE,
+        L_RECEIPTDATE           DATE,
+        L_SHIPINSTRUCT          VARCHAR(25),
+        L_SHIPMODE              VARCHAR(10),
+        L_COMMENT               VARCHAR(44),
+
+        P_PARTKEY               NUMBER,
+        P_NAME                  VARCHAR(55),
+        P_MFGR                  VARCHAR(25),
+        P_BRAND                 VARCHAR(10),
+        P_TYPE                  VARCHAR(25),
+        P_SIZE                  NUMBER,
+        P_CONTAINER             VARCHAR(10),
+        P_RETAILPRICE           NUMBER(15,2),
+        P_COMMENT               VARCHAR(23),
+
+        INSERT_GMT_TIMESTAMP    TIMESTAMP_TZ,
+        UPDATE_GMT_TIMESTAMP    TIMESTAMP_TZ
+    );
+
+
+    -- Step 2: Delete existing records
+    DELETE FROM IFFU_DB.PUBLIC.DERIVED_LINEITEM_PART;
+
+
+    -- Step 3: Insert transformed data
+    INSERT INTO IFFU_DB.PUBLIC.DERIVED_LINEITEM_PART
+    (
+        L_ORDERKEY,
+        L_PARTKEY,
+        L_SUPPKEY,
+        L_LINENUMBER,
+        L_QUANTITY,
+        L_EXTENDEDPRICE,
+        L_DISCOUNT,
+        L_TAX,
+        L_RETURNFLAG,
+        L_LINESTATUS,
+        L_SHIPDATE,
+        L_COMMITDATE,
+        L_RECEIPTDATE,
+        L_SHIPINSTRUCT,
+        L_SHIPMODE,
+        L_COMMENT,
+
+        P_PARTKEY,
+        P_NAME,
+        P_MFGR,
+        P_BRAND,
+        P_TYPE,
+        P_SIZE,
+        P_CONTAINER,
+        P_RETAILPRICE,
+        P_COMMENT,
+
+        INSERT_GMT_TIMESTAMP,
+        UPDATE_GMT_TIMESTAMP
+    )
+    SELECT
+        L.L_ORDERKEY,
+        L.L_PARTKEY,
+        L.L_SUPPKEY,
+        L.L_LINENUMBER,
+        L.L_QUANTITY,
+        L.L_EXTENDEDPRICE,
+        L.L_DISCOUNT,
+        L.L_TAX,
+        L.L_RETURNFLAG,
+        L.L_LINESTATUS,
+        L.L_SHIPDATE,
+        L.L_COMMITDATE,
+        L.L_RECEIPTDATE,
+        L.L_SHIPINSTRUCT,
+        L.L_SHIPMODE,
+        L.L_COMMENT,
+
+        P.P_PARTKEY,
+        P.P_NAME,
+        P.P_MFGR,
+        P.P_BRAND,
+        P.P_TYPE,
+        P.P_SIZE,
+        P.P_CONTAINER,
+        P.P_RETAILPRICE,
+        P.P_COMMENT,
+
+        CONVERT_TIMEZONE('UTC', CURRENT_TIMESTAMP()),
+        CONVERT_TIMEZONE('UTC', CURRENT_TIMESTAMP())
+
+     FROM
+    (
+        SELECT *
+        FROM SNOWFLAKE_SAMPLE_DATA.TPCH_SF1000.LINEITEM
+        LIMIT 10000
+    ) L
+    LEFT JOIN SNOWFLAKE_SAMPLE_DATA.TPCH_SF1000.PART P
+        ON L.L_PARTKEY = P.P_PARTKEY;
+
+
+     RETURN '10,000 LINEITEM records loaded successfully into DERIVED_LINEITEM_PART';;
+
+END;
+$$;
+
+
+
+CALL IFFU_DB.PUBLIC.LOAD_DERIVED_LINEITEM_PAR()
+
+---------------------------------------------------------------------------------------------------------------
+ 
+ 
+ TO VERIFY BELOW:
+ ----------------
+
+SELECT COUNT(*)
+FROM IFFU_DB.PUBLIC.DERIVED_LINEITEM_PART;
+LIMIT 100;
+
+
+TO CHECK TIMESTAMP BELOW:
+-------------------
+ SELECT
+    L_ORDERKEY,
+    L_PARTKEY,
+    P_NAME,
+    INSERT_GMT_TIMESTAMP,
+    UPDATE_GMT_TIMESTAMP
+FROM IFFU_DB.PUBLIC.DERIVED_LINEITEM_PART
+LIMIT 10;
