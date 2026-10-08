@@ -1,0 +1,121 @@
+CREATE OR REPLACE PROCEDURE LOAD_CUSTOMER_ETL()
+RETURNS STRING
+LANGUAGE SQL
+EXECUTE AS CALLER
+AS
+$$
+DECLARE
+    V_PRE_STAGE_COUNT NUMBER;
+    V_STAGE_COUNT     NUMBER;
+    V_DIM_COUNT       NUMBER;
+BEGIN
+
+    -- ========================================================
+    -- 1. CREATE PRE-STAGE IF NOT EXISTS
+    -- ========================================================
+
+    CREATE TABLE IF NOT EXISTS PRE_STAGE_CUSTOMER_091026 AS
+    SELECT *
+    FROM SNOWFLAKE_SAMPLE_DATA.TPCDS_SF100TCL.CUSTOMER
+    WHERE 1 = 0;
+
+
+    -- ========================================================
+    -- 2. CLEAR PRE-STAGE
+    -- ========================================================
+
+    TRUNCATE TABLE PRE_STAGE_CUSTOMER_091026;
+
+
+    -- ========================================================
+    -- 3. LOAD SOURCE → PRE-STAGE
+    -- ========================================================
+
+    INSERT INTO PRE_STAGE_CUSTOMER_091026
+    SELECT *
+    FROM SNOWFLAKE_SAMPLE_DATA.TPCDS_SF100TCL.CUSTOMER LIMIT 100;
+
+
+    -- ========================================================
+    -- 4. CREATE STAGE IF NOT EXISTS
+    -- ========================================================
+
+    CREATE TABLE IF NOT EXISTS STAGE_CUSTOMER_091026 AS
+    SELECT
+        *,
+        CURRENT_TIMESTAMP()::TIMESTAMP AS INSERT_GMT_TIMESTAMP
+    FROM PRE_STAGE_CUSTOMER_091026
+    WHERE 1 = 0;
+
+
+    -- ========================================================
+    -- 5. LOAD PRE-STAGE → STAGE
+    -- ========================================================
+
+    INSERT INTO STAGE_CUSTOMER_091026
+    SELECT
+        *,
+        CURRENT_TIMESTAMP()::TIMESTAMP AS INSERT_GMT_TIMESTAMP
+    FROM PRE_STAGE_CUSTOMER_091026;
+
+
+    -- ========================================================
+    -- 6. CREATE DIMENSION IF NOT EXISTS
+    -- ========================================================
+
+    CREATE TABLE IF NOT EXISTS DIM_CUSTOMER_091026 AS
+    SELECT
+        *,
+        CURRENT_TIMESTAMP()::TIMESTAMP AS UPDATE_GMT_TIMESTAMP
+    FROM STAGE_CUSTOMER_091026
+    WHERE 1 = 0;
+
+
+    -- ========================================================
+    -- 7. LOAD STAGE → DIM
+    -- ========================================================
+
+    INSERT INTO DIM_CUSTOMER_091026
+    SELECT
+        *,
+        CURRENT_TIMESTAMP()::TIMESTAMP AS UPDATE_GMT_TIMESTAMP
+    FROM STAGE_CUSTOMER_091026;
+
+
+    -- ========================================================
+    -- 8. COUNTS
+    -- ========================================================
+
+    SELECT COUNT(*)
+    INTO :V_PRE_STAGE_COUNT
+    FROM PRE_STAGE_CUSTOMER_091026;
+
+    SELECT COUNT(*)
+    INTO :V_STAGE_COUNT
+    FROM STAGE_CUSTOMER_091026;
+
+    SELECT COUNT(*)
+    INTO :V_DIM_COUNT
+    FROM DIM_CUSTOMER_091026;
+
+
+    -- ========================================================
+    -- 9. RETURN STATUS
+    -- ========================================================
+
+    RETURN
+        'CUSTOMER ETL COMPLETED SUCCESSFULLY | ' ||
+        'PRE_STAGE = ' || V_PRE_STAGE_COUNT ||
+        ' | STAGE = ' || V_STAGE_COUNT ||
+        ' | DIM = ' || V_DIM_COUNT;
+
+END;
+$$;
+
+CALL LOAD_CUSTOMER_ETL();
+
+SELECT * FROM PRE_STAGE_CUSTOMER_091026;
+
+SELECT * FROM STAGE_CUSTOMER_091026;
+
+SELECT * FROM DIM_CUSTOMER_091026;
